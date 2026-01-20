@@ -1,11 +1,12 @@
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { ChronoDB } from './server';
+import { ChronoDB } from './backend/src/index';
 
 // Library Exports
 export { ChronoDB };
-export * from './backend/types';
+export * from './backend/src/types';
 
 // Render App if running in browser
 if (typeof document !== 'undefined') {

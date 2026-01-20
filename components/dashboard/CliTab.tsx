@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChronoDB } from '../../server';
+// Import from backend source to resolve type mismatch with DashboardPage
+import { ChronoDB } from '../../backend/src/index';
 
 interface Props {
   db: ChronoDB;

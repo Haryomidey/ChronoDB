@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { History, Clock, RefreshCw } from 'lucide-react';
-import { Snapshot } from '../../backend/types';
+// Import from backend source to ensure type consistency
+import { Snapshot } from '../../backend/src/types';
 
 interface Props {
   snapshots: Snapshot[];

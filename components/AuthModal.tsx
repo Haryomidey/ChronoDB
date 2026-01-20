@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { AuthMode, CloudUser } from '../backend/types';
-import { ChronoDB } from '../server';
+// Import types and ChronoDB from backend source to ensure consistency
+import { AuthMode, CloudUser } from '../backend/src/types';
+import { ChronoDB } from '../backend/src/index';
 import { ShieldCheck, Mail, Lock, RefreshCw, Plus, ArrowLeft } from 'lucide-react';
 
 interface Props {

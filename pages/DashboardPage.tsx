@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChronoDB } from '../server';
-import { Snapshot } from '../backend/types';
+import { ChronoDB } from '../backend/src/index';
+import { Snapshot } from '../backend/src/types';
 import { Header } from '../components/Header';
 import { Sidebar } from '../components/Sidebar';
 import { CollectionsTab } from '../components/dashboard/CollectionsTab';
@@ -10,14 +10,12 @@ import { SnapshotsTab } from '../components/dashboard/SnapshotsTab';
 import { CliTab } from '../components/dashboard/CliTab';
 import { DocsTab } from '../components/dashboard/DocsTab';
 import { Database } from 'lucide-react';
-// import { useNavigate } from 'react-router-dom'; // Removed due to missing export error
 
 interface Props {
   db: ChronoDB;
 }
 
 export const DashboardPage: React.FC<Props> = ({ db }) => {
-  // Use native hash routing instead of react-router-dom useNavigate
   const navigate = (to: string) => {
     window.location.hash = to.startsWith('/') ? '#' + to : '#' + (to.startsWith('#') ? to.slice(1) : to);
   };

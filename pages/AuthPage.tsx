@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-// import { useNavigate, useSearchParams } from 'react-router-dom'; // Removed due to missing export error
-import { ChronoDB } from '../server';
-import { AuthMode } from '../backend/types';
+import { ChronoDB } from '../backend/src/index';
+import { AuthMode } from '../backend/src/types';
 import { ShieldCheck, Mail, Lock, RefreshCw, ArrowLeft, Cloud } from 'lucide-react';
 
 interface Props {
@@ -10,12 +9,10 @@ interface Props {
 }
 
 export const AuthPage: React.FC<Props> = ({ db }) => {
-  // Replacement for useNavigate using native browser APIs
   const navigate = (to: string) => {
     window.location.hash = to.startsWith('/') ? '#' + to : '#' + (to.startsWith('#') ? to.slice(1) : to);
   };
 
-  // Replacement for useSearchParams using URLSearchParams and current hash
   const getSearchParams = () => {
     const hash = window.location.hash;
     const searchPart = hash.includes('?') ? hash.split('?')[1] : '';
@@ -45,7 +42,6 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
         await new Promise(r => setTimeout(r, 1000));
       }
 
-      // Check if we came from CLI and trigger sync
       if (db.cli.login.isAwaitingToken()) {
         db.cli.login.setAwaitingToken(false);
         await db.runSync();

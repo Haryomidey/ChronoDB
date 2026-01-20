@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { ChronoDB } from './server';
+import { ChronoDB } from './backend/src/index';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';
 import { RefreshCw } from 'lucide-react';
@@ -10,7 +11,7 @@ const App: React.FC = () => {
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
 
   useEffect(() => {
-    // Initialize the ChronoDB instance using the new config pattern
+    // Initialize the ChronoDB instance using the new consolidated package structure
     ChronoDB.open({ snapshots: { interval: 60000 } }).then(instance => {
       setDb(instance);
       setIsReady(true);

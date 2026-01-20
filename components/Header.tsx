@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Database, Cloud, CloudOff, User, LogOut } from 'lucide-react';
-import { CloudUser } from '../backend/types';
+// Import from backend source to ensure type consistency
+import { CloudUser } from '../backend/src/types';
 
 interface Props {
   user: CloudUser | null;

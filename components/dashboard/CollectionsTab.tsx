@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-import { ChronoDB } from '../../server';
-// Added Database icon to the imports from lucide-react
+import { ChronoDB } from '../../backend/src/index';
 import { Layers, Edit2, Trash2, Plus, ArrowRight, Database } from 'lucide-react';
 
 interface Props {

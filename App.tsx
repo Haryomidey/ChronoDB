@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ChronoDB } from './backend/ChronoDB';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';
 import { RefreshCw } from 'lucide-react';
+import Test from './pages/Test';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<ChronoDB | null>(null);
@@ -26,13 +27,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
+        <Route path="/test" element={<Test />} />
         <Route path="/" element={<DashboardPage db={db} />} />
         <Route path="/auth" element={<AuthPage db={db} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 

@@ -7,7 +7,7 @@ import { RestoreEngine } from './engine/restore';
 import { Collection } from './engine/collection';
 import { SyncEngine } from './engine/sync';
 import { LoginCLI } from './cli/login';
-import { OperationType, DBRecord, Snapshot, CloudUser } from './types';
+import { OperationType, DBRecord } from './types';
 
 export class ChronoDB {
   private log: LogEngine;

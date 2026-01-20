@@ -1,5 +1,6 @@
-import { ChronoDB } from '../ChronoDB';
+import { ChronoDB } from '../../server';
 import { OperationType, DBRecord, Filter } from '../types';
+import { generateId } from '../utils/crypto';
 
 export class Collection {
   constructor(
@@ -7,28 +8,28 @@ export class Collection {
     private db: ChronoDB
   ) {}
 
-  async add(data: any): Promise<DBRecord> {
-    const id = data._id || `doc_${Math.random().toString(36).substr(2, 9)}`;
-    const doc = { ...data, _id: id };
+  async add<T = any>(data: T): Promise<DBRecord> {
+    const id = (data as any)._id || generateId();
+    const doc = { ...(data as any), _id: id };
     return this.db._internalWrite(OperationType.INSERT, this.name, id, doc);
   }
 
-  async get(filter: Filter | string): Promise<any | null> {
-    const all = await this.all();
+  async get<T = any>(filter: Filter | string): Promise<T | null> {
+    const all = await this.all<T>();
     if (typeof filter === 'string') {
-      return all.find(d => d._id === filter) || null;
+      return all.find((d: any) => d._id === filter) || null;
     }
-    return all.find(doc => {
+    return all.find((doc: any) => {
       return Object.entries(filter).every(([key, value]) => doc[key] === value);
     }) || null;
   }
 
-  async all(): Promise<any[]> {
-    return this.db._internalIndex().getAll(this.name).map(r => r.data);
+  async all<T = any>(): Promise<T[]> {
+    return this.db._internalIndex().getAll(this.name).map(r => r.data as T);
   }
 
-  async update(filter: Filter | string, partialData: any): Promise<DBRecord | null> {
-    const target = await this.get(filter);
+  async update<T = any>(filter: Filter | string, partialData: Partial<T>): Promise<DBRecord | null> {
+    const target = await this.get<any>(filter);
     if (!target) return null;
 
     const id = target._id;
@@ -37,7 +38,7 @@ export class Collection {
   }
 
   async remove(filter: Filter | string): Promise<DBRecord | null> {
-    const target = await this.get(filter);
+    const target = await this.get<any>(filter);
     if (!target) return null;
 
     return this.db._internalWrite(OperationType.DELETE, this.name, target._id, null);

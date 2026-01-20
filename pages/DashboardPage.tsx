@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChronoDB } from '../backend/ChronoDB';
+import { ChronoDB } from '../server';
 import { Snapshot } from '../backend/types';
 import { Header } from '../components/Header';
 import { Sidebar } from '../components/Sidebar';

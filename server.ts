@@ -1,20 +1,25 @@
+import { LogEngine } from './backend/engine/log';
+import { IndexManager } from './backend/engine/index';
+import { VersionManager } from './backend/engine/version';
+import { SnapshotManager } from './backend/engine/snapshot';
+import { RestoreEngine } from './backend/engine/restore';
+import { Collection } from './backend/engine/collection';
+import { SyncEngine } from './backend/engine/sync';
+import { LoginCLI } from './backend/cli/login';
+import { OperationType, DBRecord, Snapshot, CloudUser } from './backend/types';
 
-import { LogEngine } from './engine/log';
-import { IndexManager } from './engine/index';
-import { VersionManager } from './engine/version';
-import { SnapshotManager } from './engine/snapshot';
-import { RestoreEngine } from './engine/restore';
-import { Collection } from './engine/collection';
-import { SyncEngine } from './engine/sync';
-import { LoginCLI } from './cli/login';
-import { OperationType, DBRecord, Snapshot, CloudUser } from './types';
+export interface ChronoConfig {
+  path?: string;
+  snapshots?: {
+    interval?: number;
+  };
+}
 
 export class ChronoDB {
   private log: LogEngine;
   private index: IndexManager;
   private version: VersionManager;
   public snapshots: SnapshotManager;
-  // Renamed from restore to restoreEngine for consistency with server.ts
   private restoreEngine: RestoreEngine;
   private syncEngine: SyncEngine;
   public cli: { login: LoginCLI };
@@ -22,28 +27,29 @@ export class ChronoDB {
   private intervalTimer: any = null;
   private collections: Map<string, Collection> = new Map();
 
-  constructor(autoSnapshotIntervalMs: number = 120000) {
-    this.log = new LogEngine();
+  constructor(config: ChronoConfig = {}) {
+    const dbPath = config.path || './chronodata';
+    const interval = config.snapshots?.interval || 0;
+    
+    this.log = new LogEngine(dbPath);
     this.index = new IndexManager();
     this.version = new VersionManager();
-    this.snapshots = new SnapshotManager();
-    // Use renamed restoreEngine property
+    this.snapshots = new SnapshotManager(dbPath);
     this.restoreEngine = new RestoreEngine(this.index, this.version);
     this.syncEngine = new SyncEngine();
     this.cli = { login: new LoginCLI() };
 
     this.boot();
 
-    if (autoSnapshotIntervalMs > 0) {
+    if (interval > 0) {
       this.intervalTimer = setInterval(() => {
         this.triggerSnapshot('interval');
-      }, autoSnapshotIntervalMs);
+      }, interval);
     }
   }
 
-  static async open(config: { path?: string, snapshots?: any } = {}) {
-    const interval = config.snapshots?.interval === '2m' ? 120000 : (config.snapshots?.interval || 0);
-    return new ChronoDB(interval);
+  static async open(config: ChronoConfig = {}) {
+    return new ChronoDB(config);
   }
 
   private boot() {
@@ -56,10 +62,9 @@ export class ChronoDB {
     this.version.setVersion(maxV);
   }
 
-  // Added generic T parameter and cast 'this' to any to avoid complex circular type references with Collection
   col<T = any>(name: string): Collection {
     if (!this.collections.has(name)) {
-      this.collections.set(name, new Collection(name, this as any));
+      this.collections.set(name, new Collection(name, this));
     }
     return this.collections.get(name)!;
   }
@@ -85,9 +90,6 @@ export class ChronoDB {
     if (user?.isLoggedIn) {
       const currentSnaps = this.snapshots.list();
       const syncedSnaps = await this.syncEngine.sync(currentSnaps, user);
-      
-      // Update local storage with sync status
-      // In this VirtualFS we just rewrite the log
       this.snapshots.saveAll(syncedSnaps);
     }
   }
@@ -102,7 +104,6 @@ export class ChronoDB {
     if (!target) throw new Error('Snapshot not found');
 
     const records = this.log.readAll();
-    // Use renamed restoreEngine property
     await this.restoreEngine.restoreToVersion(target.version, records);
     this.triggerSnapshot('restore');
   }

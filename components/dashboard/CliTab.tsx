@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { ChronoDB } from '../../backend/ChronoDB';
+import { ChronoDB } from '../../server';
 
 interface Props {
   db: ChronoDB;

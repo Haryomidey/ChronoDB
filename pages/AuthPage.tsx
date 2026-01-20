@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 // import { useNavigate, useSearchParams } from 'react-router-dom'; // Removed due to missing export error
-import { ChronoDB } from '../backend/ChronoDB';
+import { ChronoDB } from '../server';
 import { AuthMode } from '../backend/types';
 import { ShieldCheck, Mail, Lock, RefreshCw, ArrowLeft, Cloud } from 'lucide-react';
 

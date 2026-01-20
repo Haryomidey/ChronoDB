@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { ChronoDB } from './backend/ChronoDB';
+import { ChronoDB } from './server';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';
 import { RefreshCw } from 'lucide-react';
@@ -11,13 +10,12 @@ const App: React.FC = () => {
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
 
   useEffect(() => {
-    // Initialize the ChronoDB instance
+    // Initialize the ChronoDB instance using the new config pattern
     ChronoDB.open({ snapshots: { interval: 60000 } }).then(instance => {
       setDb(instance);
       setIsReady(true);
     });
 
-    // Listen for hash changes to perform manual routing
     const handleHashChange = () => {
       setCurrentHash(window.location.hash || '#/');
     };
@@ -34,14 +32,12 @@ const App: React.FC = () => {
     );
   }
 
-  // Simple hash-based routing logic
   const path = currentHash.split('?')[0];
   
   if (path === '#/auth') {
     return <AuthPage db={db} />;
   }
 
-  // Default route (catch-all) is the Dashboard
   return <DashboardPage db={db} />;
 };
 

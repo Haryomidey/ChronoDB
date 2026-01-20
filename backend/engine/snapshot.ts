@@ -1,10 +1,14 @@
-
 import { Snapshot } from '../types';
-import { vfs } from '../vfs';
+import { fsAdapter } from '../utils/fs-adapter';
+import * as path from 'path';
 
 export class SnapshotManager {
-  private snapshotPath: string = 'snapshots.log';
+  private snapshotPath: string;
   private writesSinceLast: number = 0;
+
+  constructor(dbPath: string = './chronodata') {
+    this.snapshotPath = path.join(dbPath, 'snapshots.log');
+  }
 
   incrementWrite() {
     this.writesSinceLast++;
@@ -25,14 +29,14 @@ export class SnapshotManager {
     };
 
     const entry = JSON.stringify(snapshot) + '\n';
-    vfs.appendFileSync(this.snapshotPath, entry);
+    fsAdapter.appendFileSync(this.snapshotPath, entry);
     this.writesSinceLast = 0;
 
     return snapshot;
   }
 
   list(): Snapshot[] {
-    const raw = vfs.readFileSync(this.snapshotPath);
+    const raw = fsAdapter.readFileSync(this.snapshotPath);
     if (!raw) return [];
     return raw.trim().split('\n').filter(l => l).map(l => JSON.parse(l));
   }
@@ -47,15 +51,15 @@ export class SnapshotManager {
   }
 
   deleteAll(): void {
-    vfs.writeFileSync(this.snapshotPath, '');
+    fsAdapter.writeFileSync(this.snapshotPath, '');
   }
 
   saveAll(snaps: Snapshot[]) {
     const newContent = snaps.map(s => JSON.stringify(s)).join('\n') + (snaps.length > 0 ? '\n' : '');
-    vfs.writeFileSync(this.snapshotPath, newContent);
+    fsAdapter.writeFileSync(this.snapshotPath, newContent);
   }
 
   getMetaRaw() {
-    return vfs.readFileSync(this.snapshotPath);
+    return fsAdapter.readFileSync(this.snapshotPath);
   }
 }

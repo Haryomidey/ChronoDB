@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// Remove react-router-dom due to environment issues with exported members
 import { ChronoDB } from './backend/ChronoDB';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';

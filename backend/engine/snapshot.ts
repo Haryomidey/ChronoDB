@@ -20,7 +20,8 @@ export class SnapshotManager {
       version,
       timestamp: Date.now(),
       reason,
-      writesSinceLast: this.writesSinceLast
+      writesSinceLast: this.writesSinceLast,
+      isSynced: false
     };
 
     const entry = JSON.stringify(snapshot) + '\n';
@@ -49,7 +50,7 @@ export class SnapshotManager {
     vfs.writeFileSync(this.snapshotPath, '');
   }
 
-  private saveAll(snaps: Snapshot[]) {
+  saveAll(snaps: Snapshot[]) {
     const newContent = snaps.map(s => JSON.stringify(s)).join('\n') + (snaps.length > 0 ? '\n' : '');
     vfs.writeFileSync(this.snapshotPath, newContent);
   }

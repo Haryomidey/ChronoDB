@@ -10,14 +10,18 @@ import { SnapshotsTab } from '../components/dashboard/SnapshotsTab';
 import { CliTab } from '../components/dashboard/CliTab';
 import { DocsTab } from '../components/dashboard/DocsTab';
 import { Database } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom'; // Removed due to missing export error
 
 interface Props {
   db: ChronoDB;
 }
 
 export const DashboardPage: React.FC<Props> = ({ db }) => {
-  const navigate = useNavigate();
+  // Use native hash routing instead of react-router-dom useNavigate
+  const navigate = (to: string) => {
+    window.location.hash = to.startsWith('/') ? '#' + to : '#' + (to.startsWith('#') ? to.slice(1) : to);
+  };
+
   const [activeCollection, setActiveCollection] = useState<string>('users');
   const [state, setState] = useState<any>(null);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -90,10 +94,14 @@ export const DashboardPage: React.FC<Props> = ({ db }) => {
                 refresh();
                 showNotification(`Restored to ${id}`);
               }}
-              onCreate={() => {
-                db.snapshots.createSnapshot(state.version, 'manual');
-                refresh();
-                showNotification('Snapshot Created');
+              onCreate={async () => {
+                const snap = await db.triggerSnapshot('manual');
+                if (snap) {
+                  refresh();
+                  showNotification('Manual Snapshot Captured');
+                } else {
+                  showNotification('No data changes to capture');
+                }
               }}
             />
           )}
@@ -115,8 +123,8 @@ export const DashboardPage: React.FC<Props> = ({ db }) => {
             <span>RUNTIME: VIRTUAL_VFS</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${state.user?.isLoggedIn ? 'bg-blue-500' : 'bg-amber-500'}`}></div>
-            <span>SYNC: {state.user?.isLoggedIn ? 'ACTIVE' : 'LOCAL_ONLY'}</span>
+            <div className={`w-2 h-2 rounded-full ${state.user?.isLoggedIn ? 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]' : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.5)]'}`}></div>
+            <span>SYNC: {state.user?.isLoggedIn ? 'ACTIVE_SESSION' : 'LOCAL_OFFLINE'}</span>
           </div>
         </div>
         <div className="text-slate-700">ChronoDB v1.2.0 • Build ID: FB-902</div>

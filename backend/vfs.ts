@@ -1,4 +1,3 @@
-
 export class VirtualFS {
   private files: Record<string, string> = {};
 

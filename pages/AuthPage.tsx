@@ -1,17 +1,28 @@
 
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+// import { useNavigate, useSearchParams } from 'react-router-dom'; // Removed due to missing export error
 import { ChronoDB } from '../backend/ChronoDB';
 import { AuthMode } from '../backend/types';
-import { ShieldCheck, Mail, Lock, RefreshCw, ArrowLeft, Plus } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, RefreshCw, ArrowLeft, Cloud } from 'lucide-react';
 
 interface Props {
   db: ChronoDB;
 }
 
 export const AuthPage: React.FC<Props> = ({ db }) => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  // Replacement for useNavigate using native browser APIs
+  const navigate = (to: string) => {
+    window.location.hash = to.startsWith('/') ? '#' + to : '#' + (to.startsWith('#') ? to.slice(1) : to);
+  };
+
+  // Replacement for useSearchParams using URLSearchParams and current hash
+  const getSearchParams = () => {
+    const hash = window.location.hash;
+    const searchPart = hash.includes('?') ? hash.split('?')[1] : '';
+    return new URLSearchParams(searchPart);
+  };
+
+  const searchParams = getSearchParams();
   const initialMode = (searchParams.get('mode') as AuthMode) || 'login';
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -31,12 +42,18 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
       } else if (mode === 'signup') {
         await db.cli.login.signup(email, password);
       } else {
-        // forgot password simulation
         await new Promise(r => setTimeout(r, 1000));
       }
+
+      // Check if we came from CLI and trigger sync
+      if (db.cli.login.isAwaitingToken()) {
+        db.cli.login.setAwaitingToken(false);
+        await db.runSync();
+      }
+
       navigate('/');
     } catch (err) {
-      setError('Authentication failed. Please check your credentials.');
+      setError('Authentication failed. Connection refused by server.');
     } finally {
       setIsLoading(false);
     }
@@ -54,12 +71,16 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
         
         <div className="flex flex-col items-center mb-10">
           <div className="p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 mb-6">
-            <ShieldCheck className="w-12 h-12 text-emerald-400" />
+            <Cloud className="w-12 h-12 text-emerald-400" />
           </div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
-            {mode === 'login' ? 'Cloud Access' : mode === 'signup' ? 'New Account' : 'Recovery'}
+            {mode === 'login' ? 'Auth Node' : mode === 'signup' ? 'New Account' : 'Recovery'}
           </h2>
-          <p className="text-slate-500 text-sm mt-2">Connect your local instance to ChronoCloud.</p>
+          <p className="text-slate-500 text-sm mt-2 text-center">
+            {db.cli.login.isAwaitingToken() 
+              ? 'CLI identity verification required to enable cloud sync.' 
+              : 'Connect your local instance to the global state mesh.'}
+          </p>
         </div>
 
         {error && (
@@ -70,7 +91,7 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] ml-1">Email Identifier</label>
+            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] ml-1">Identity</label>
             <div className="relative">
               <Mail className="absolute left-4 top-4 w-4 h-4 text-slate-500" />
               <input 
@@ -83,7 +104,7 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
 
           {mode !== 'forgot' && (
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] ml-1">Secure Password</label>
+              <label className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] ml-1">Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-4 w-4 h-4 text-slate-500" />
                 <input 
@@ -100,19 +121,19 @@ export const AuthPage: React.FC<Props> = ({ db }) => {
             className="w-full py-5 bg-emerald-600 text-white font-black rounded-2xl shadow-xl shadow-emerald-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 tracking-widest text-xs"
           >
             {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
-            {mode === 'login' ? 'ESTABLISH LINK' : mode === 'signup' ? 'PROVISION ACCOUNT' : 'SEND RESET'}
+            {mode === 'login' ? 'VERIFY_IDENTITY' : mode === 'signup' ? 'REGISTER_NODE' : 'RECOVER_KEY'}
           </button>
         </form>
 
         <div className="mt-10 pt-8 border-t border-slate-800 flex flex-col items-center gap-3 text-[11px] font-bold tracking-wider">
           {mode === 'login' ? (
             <>
-              <button onClick={() => setMode('signup')} className="text-slate-400 hover:text-emerald-400 transition-colors uppercase">No Account? <span className="underline decoration-emerald-500/30">Signup</span></button>
-              <button onClick={() => setMode('forgot')} className="text-slate-600 hover:text-white uppercase transition-colors">Forgot credentials?</button>
+              <button onClick={() => setMode('signup')} className="text-slate-400 hover:text-emerald-400 transition-colors uppercase">Register Account</button>
+              <button onClick={() => setMode('forgot')} className="text-slate-600 hover:text-white uppercase transition-colors">Credential Recovery</button>
             </>
           ) : (
             <button onClick={() => setMode('login')} className="text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-2 uppercase">
-              Existing Account? <span className="underline decoration-emerald-500/30">Log in</span>
+              Existing Account Login
             </button>
           )}
         </div>

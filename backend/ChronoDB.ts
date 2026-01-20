@@ -7,7 +7,7 @@ import { RestoreEngine } from './engine/restore';
 import { Collection } from './engine/collection';
 import { SyncEngine } from './engine/sync';
 import { LoginCLI } from './cli/login';
-import { OperationType, DBRecord } from './types';
+import { OperationType, DBRecord, Snapshot, CloudUser } from './types';
 
 export class ChronoDB {
   private log: LogEngine;
@@ -34,7 +34,7 @@ export class ChronoDB {
 
     if (autoSnapshotIntervalMs > 0) {
       this.intervalTimer = setInterval(() => {
-        this.snapshots.createSnapshot(this.version.getCurrent(), 'interval');
+        this.triggerSnapshot('interval');
       }, autoSnapshotIntervalMs);
     }
   }
@@ -66,13 +66,27 @@ export class ChronoDB {
     const record = this.log.append(op, collection, id, data, v);
     this.index.update(record);
     this.snapshots.incrementWrite();
-    
+    return record;
+  }
+
+  async triggerSnapshot(reason: Snapshot['reason']) {
+    const snap = this.snapshots.createSnapshot(this.version.getCurrent(), reason);
+    if (snap) {
+      await this.runSync();
+    }
+    return snap;
+  }
+
+  async runSync() {
     const user = this.cli.login.getUser();
     if (user?.isLoggedIn) {
-      await this.syncEngine.sync(this.log.readAll(), this.version.getCurrent(), user);
+      const currentSnaps = this.snapshots.list();
+      const syncedSnaps = await this.syncEngine.sync(currentSnaps, user);
+      
+      // Update local storage with sync status
+      // In this VirtualFS we just rewrite the log
+      this.snapshots.saveAll(syncedSnaps);
     }
-
-    return record;
   }
 
   _internalIndex() {
@@ -86,7 +100,23 @@ export class ChronoDB {
 
     const records = this.log.readAll();
     await this.restore.restoreToVersion(target.version, records);
-    this.snapshots.createSnapshot(this.version.getCurrent(), 'restore');
+    this.triggerSnapshot('restore');
+  }
+
+  async deleteSnapshot(id: string) {
+    const user = this.cli.login.getUser();
+    this.snapshots.delete(id);
+    if (user?.isLoggedIn) {
+      await this.syncEngine.deleteRemoteSnapshot(id, user);
+    }
+  }
+
+  async deleteAllSnapshots() {
+    const user = this.cli.login.getUser();
+    this.snapshots.deleteAll();
+    if (user?.isLoggedIn) {
+      await this.syncEngine.clearRemote(user);
+    }
   }
 
   getInternalState() {

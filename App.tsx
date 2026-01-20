@@ -1,20 +1,29 @@
+
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+// Remove react-router-dom due to environment issues with exported members
 import { ChronoDB } from './backend/ChronoDB';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';
 import { RefreshCw } from 'lucide-react';
-import Test from './pages/Test';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<ChronoDB | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
 
   useEffect(() => {
+    // Initialize the ChronoDB instance
     ChronoDB.open({ snapshots: { interval: 60000 } }).then(instance => {
       setDb(instance);
       setIsReady(true);
     });
+
+    // Listen for hash changes to perform manual routing
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash || '#/');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   if (!isReady || !db) {
@@ -26,16 +35,15 @@ const App: React.FC = () => {
     );
   }
 
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/test" element={<Test />} />
-        <Route path="/" element={<DashboardPage db={db} />} />
-        <Route path="/auth" element={<AuthPage db={db} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  // Simple hash-based routing logic
+  const path = currentHash.split('?')[0];
+  
+  if (path === '#/auth') {
+    return <AuthPage db={db} />;
+  }
+
+  // Default route (catch-all) is the Dashboard
+  return <DashboardPage db={db} />;
 };
 
 export default App;

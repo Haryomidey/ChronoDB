@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { ChronoEngine } from "./engine";
 import { saveToken, loadToken } from "./utils/token";
 import { getAvailablePort } from "./utils/port";
+import { resolveChronoBase } from "./utils/basePath";
 
 const args = process.argv.slice(2);
 
@@ -72,7 +73,7 @@ async function main(): Promise<void> {
     }
 
     if (args[0] === "snapshots") {
-        const db = new ChronoEngine(process.cwd());
+        const db = new ChronoEngine(resolveChronoBase());
 
         if (args[1] === "list") {
             console.table(await db.snapshots.list());

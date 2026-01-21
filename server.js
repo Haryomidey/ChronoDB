@@ -4,28 +4,26 @@ async function main() {
     const db = await ChronoDB.open({ cloudSync: false });
 
     const users = db.col("users", {
-        userName: {
-            type: "string",
-            important: true,
-        },
-        email: {
-            type: "string",
-            distinct: true,
-        },
-        role: "string"
+        schema: {
+            userName: {
+                type: "string",
+                important: true,
+            },
+            email: {
+                type: "string",
+                distinct: true,
+            },
+            role: "string"
+        }
     });
 
-    await users.addMany([
+    await users.add(
         {
             email: "oladiipoayomide2021@gmail.com",
             role: "Software Engineering"
-        },
-        {
-            userName: "John Doe",
-            email: "oladiipoayomide2021@gmail.com",
-            role: "Software Engineering"
-        },
-    ])
+        }
+    )
+
 }
 
 main();

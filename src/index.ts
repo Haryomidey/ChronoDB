@@ -1,13 +1,14 @@
-import path from "path";
+import fs from "fs";
 import { ChronoEngine } from "./engine";
 import { ChronoDBOptions } from "./types";
+import { resolveChronoBase } from "./utils/basePath";
 
 export default {
-    open: async (options: ChronoDBOptions): Promise<ChronoEngine> => {
-        const base =
-            options.path ??
-            path.join(process.cwd(), "ChronoDB");
+    open: async (options: ChronoDBOptions = {}): Promise<ChronoEngine> => {
+        const base = resolveChronoBase(options.path);;
 
-        return new ChronoEngine(base);
+        if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
+
+        return new ChronoEngine(base, { cloudSync: options.cloudSync ?? true });
     }
 };

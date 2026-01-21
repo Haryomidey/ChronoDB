@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs";
 import { v4 as uuid } from "uuid";
 import { ensureDir, readJSON, writeJSON } from "./utils/file";
 import { CloudSync } from "./sync";
@@ -15,19 +16,14 @@ export class ChronoEngine {
         ensureDir(basePath);
         this.snapshotsDir = path.join(basePath, ".snapshots");
         ensureDir(this.snapshotsDir);
-
         this.cloud = options?.cloudSync === false ? null : new CloudSync();
     }
 
     col<T extends Record<string, any>>(
         name: string,
-        options?: {
-            schema?: Schema<T>;
-            indexes?: (keyof T)[];
-        }
+        options?: { schema?: Schema<T>; indexes?: (keyof T)[] }
     ): Collection<T> {
         const file = path.join(this.basePath, `${name}.json`);
-
         return new Collection<T>(
             file,
             () => this.createSnapshot("change"),
@@ -38,11 +34,8 @@ export class ChronoEngine {
 
     async transaction(fn: () => Promise<void>): Promise<void> {
         const snapshotFile = path.join(this.snapshotsDir, "tx-backup.json");
-        const state = readJSON<Record<string, unknown>>(
-            path.join(this.basePath, ".__state.json"),
-            {}
-        );
-
+        const stateFile = path.join(this.basePath, ".__state.json");
+        const state = readJSON<Record<string, unknown>>(stateFile, {});
         writeJSON(snapshotFile, state);
 
         try {
@@ -50,25 +43,28 @@ export class ChronoEngine {
             await this.createSnapshot("manual");
         } catch (error) {
             const backup = readJSON<Record<string, unknown>>(snapshotFile, {});
-            writeJSON(path.join(this.basePath, ".__state.json"), backup);
+            writeJSON(stateFile, backup);
             throw new Error("Transaction rolled back");
         }
     }
 
     snapshots = {
-        list: async (): Promise<SnapshotMeta[]> =>
-            readJSON(path.join(this.snapshotsDir, "meta.json"), []),
+        list: async (): Promise<SnapshotMeta[]> => {
+            const file = path.join(this.snapshotsDir, "meta.json");
+            if (!fs.existsSync(file)) return [];
+            return readJSON<SnapshotMeta[]>(file, []);
+        },
 
         delete: async (id: string): Promise<void> => {
-            const meta = await this.snapshots.list();
-            writeJSON(
-                path.join(this.snapshotsDir, "meta.json"),
-                meta.filter(s => s.snapshotId !== id)
-            );
+            const file = path.join(this.snapshotsDir, "meta.json");
+            const meta = fs.existsSync(file) ? readJSON<SnapshotMeta[]>(file, []) : [];
+            const updated = meta.filter(s => s.snapshotId !== id);
+            writeJSON(file, updated);
         },
 
         deleteAll: async (): Promise<void> => {
-            writeJSON(path.join(this.snapshotsDir, "meta.json"), []);
+            const file = path.join(this.snapshotsDir, "meta.json");
+            writeJSON(file, []);
         },
 
         setInterval: async (ms: number): Promise<void> => {
@@ -78,7 +74,8 @@ export class ChronoEngine {
     };
 
     private async createSnapshot(reason: SnapshotMeta["reason"]): Promise<void> {
-        const meta = await this.snapshots.list();
+        const file = path.join(this.snapshotsDir, "meta.json");
+        const meta = readJSON<SnapshotMeta[]>(file, []);
 
         const snapshot: SnapshotMeta = {
             snapshotId: uuid(),
@@ -88,13 +85,11 @@ export class ChronoEngine {
         };
 
         meta.push(snapshot);
-        writeJSON(path.join(this.snapshotsDir, "meta.json"), meta);
+        writeJSON(file, meta);
 
         if (!this.cloud) return;
-
         const enabled = await this.cloud.enabled();
         if (!enabled) return;
-
         await this.cloud.syncSnapshot(snapshot);
     }
 }

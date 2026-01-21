@@ -1,14 +1,25 @@
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { ensureDir, readJSON, writeJSON } from "./utils/file";
-import {
-    AdvancedQueryOptions,
-    EnumSchema,
-    FieldSchema,
-    Query,
-    Schema,
-    WithId,
-} from "./types";
+import { EnumSchema, FieldSchema, Query, Schema, WithId } from "./types";
+
+/* ---------------------------------- */
+/* Utilities                          */
+/* ---------------------------------- */
+
+function formatTimestamp(ts: number) {
+    const d = new Date(ts);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/* ---------------------------------- */
+/* Collection                         */
+/* ---------------------------------- */
 
 export class Collection<T extends Record<string, any>> {
     private indexFile: string;
@@ -18,33 +29,91 @@ export class Collection<T extends Record<string, any>> {
         private onChange: () => void,
         private schema?: Schema<T>,
         private indexedFields: (keyof T)[] = [],
-        private strict: boolean = true // reject unknown fields
+        private strict: boolean = true
     ) {
+        /* ---------- Guard: invalid collection path ---------- */
+        if (!file || typeof file !== "string") {
+            throw new Error("Invalid collection file path");
+        }
+
+        /* ---------- Guard: invalid schema ---------- */
+        if (schema !== undefined) {
+            if (!isPlainObject(schema)) {
+                throw new Error("Invalid schema definition: schema must be an object");
+            }
+
+            for (const [key, rule] of Object.entries(schema)) {
+                if (
+                    typeof rule !== "string" &&
+                    !isPlainObject(rule)
+                ) {
+                    throw new Error(
+                        `Invalid schema rule for field "${key}"`
+                    );
+                }
+
+                if (isPlainObject(rule)) {
+                    if (
+                        "type" in rule &&
+                        typeof (rule as any).type !== "string"
+                    ) {
+                        throw new Error(
+                            `Invalid schema type for field "${key}"`
+                        );
+                    }
+                }
+            }
+        }
+
+        /* ---------- Guard: invalid indexed fields ---------- */
+        if (!Array.isArray(indexedFields)) {
+            throw new Error("indexes must be an array of field names");
+        }
+
         this.indexFile = `${file}.index.json`;
         ensureDir(path.dirname(file));
         this.rebuildIndexes();
     }
 
-    /** Load all data from JSON file */
-    private load(): WithId<T>[] {
-        return readJSON<WithId<T>[]>(this.file, []);
+    /* ---------------------------------- */
+    /* Storage                            */
+    /* ---------------------------------- */
+
+    private load(): WithId<T & { createdAt: string; updatedAt: string }>[] {
+        return readJSON(this.file, []);
     }
 
-    /** Save all data to JSON file */
-    private save(data: WithId<T>[]): void {
+    private save(data: WithId<T & { createdAt: string; updatedAt: string }>[]): void {
         writeJSON(this.file, data);
         this.rebuildIndexes();
         this.onChange();
     }
 
-    /** Validate schema including important, distinct, enums, arrays, nullable, defaults, and custom validators */
-    private validateSchema(doc: T, skipDistinctCheck = false, batchDocs: T[] = []): T {
-        if (!this.schema) return doc;
+    /* ---------------------------------- */
+    /* Schema Validation                  */
+    /* ---------------------------------- */
+
+    private validateSchema(
+        doc: T,
+        opts?: { skipDistinctCheck?: boolean; existingDocs?: Array<Record<string, any>>; excludeId?: string }
+    ): T {
+        if (!this.schema) {
+            throw new Error(
+                "Schema validation failed: collection has no schema"
+            );
+        }
+
+        if (!isPlainObject(doc)) {
+            throw new Error("Invalid document: document must be an object");
+        }
+
+        const skipDistinctCheck = opts?.skipDistinctCheck ?? false;
+        const existingDocs = opts?.existingDocs ?? this.load();
+        const excludeId = opts?.excludeId;
 
         const result: Record<string, any> = { ...doc };
-        const persistedData = this.load();
 
-        // Strict mode: reject unknown fields
+        /* ---------- Unknown fields ---------- */
         if (this.strict) {
             for (const key of Object.keys(result)) {
                 if (!(key in this.schema)) {
@@ -53,63 +122,73 @@ export class Collection<T extends Record<string, any>> {
             }
         }
 
+        /* ---------- Field rules ---------- */
         for (const key in this.schema) {
             const rule = this.schema[key];
             const value = result[key];
 
-            // Primitive type schema shortcut
+            /* Primitive shorthand */
             if (typeof rule === "string") {
-                if (value === undefined) throw new Error(`Schema violation: ${key} is important`);
-                if (typeof value !== rule) throw new Error(`Schema violation: ${key} should be ${rule}`);
-                continue;
-            }
-
-            // Enum validation
-            if ((rule as EnumSchema).type === "enum") {
-                const enumRule = rule as EnumSchema;
-                if (value === undefined) throw new Error(`Schema violation: ${key} is important`);
-                if (!enumRule.values.includes(value)) {
-                    throw new Error(`Schema violation: ${key} must be one of ${enumRule.values.join(", ")}`);
+                if (value === undefined) {
+                    throw new Error(`Schema violation: ${key} is required`);
+                }
+                if (typeof value !== rule) {
+                    throw new Error(`Schema violation: ${key} should be ${rule}`);
                 }
                 continue;
             }
 
+            /* Enum */
+            if ((rule as EnumSchema).type === "enum") {
+                const enumRule = rule as EnumSchema;
+                if (value === undefined) {
+                    throw new Error(`Schema violation: ${key} is required`);
+                }
+                if (!enumRule.values.includes(value)) {
+                    throw new Error(
+                        `Schema violation: ${key} must be one of ${enumRule.values.join(", ")}`
+                    );
+                }
+                continue;
+            }
+
+            /* FieldSchema */
             const fieldRule = rule as FieldSchema & { important?: boolean; distinct?: boolean };
 
-            // Handle missing value
             if (value === undefined) {
                 if (fieldRule.default !== undefined) {
                     result[key] = fieldRule.default;
                     continue;
                 }
-                if (fieldRule.important) throw new Error(`Schema violation: ${key} is important`);
+                if (fieldRule.important) {
+                    throw new Error(`Schema violation: ${key} is required`);
+                }
                 continue;
             }
 
-            // Null check
             if (value === null && !fieldRule.nullable) {
                 throw new Error(`Schema violation: ${key} cannot be null`);
             }
 
-            // Type check
             if (value !== null) {
                 if (fieldRule.type === "array") {
-                    if (!Array.isArray(value)) throw new Error(`Schema violation: ${key} should be an array`);
+                    if (!Array.isArray(value)) {
+                        throw new Error(`Schema violation: ${key} should be an array`);
+                    }
                 } else if (typeof value !== fieldRule.type) {
                     throw new Error(`Schema violation: ${key} should be ${fieldRule.type}`);
                 }
             }
 
-            // Custom validator
             if (fieldRule.validate && !fieldRule.validate(value)) {
                 throw new Error(`Schema violation: ${key} failed custom validation`);
             }
 
-            // Unique/distinct check
             if (fieldRule.distinct && !skipDistinctCheck) {
-                const existsInPersisted = persistedData.some(d => d[key] === value);
-                const existsInBatch = batchDocs.some(d => d[key] === value);
-                if (existsInPersisted || existsInBatch) {
+                const exists = existingDocs.some(
+                    d => d[key] === value && d.id !== excludeId
+                );
+                if (exists) {
                     throw new Error(`Schema violation: ${key} must be distinct`);
                 }
             }
@@ -118,19 +197,24 @@ export class Collection<T extends Record<string, any>> {
         return result as T;
     }
 
-    /** Rebuild indexes for indexed fields */
+    /* ---------------------------------- */
+    /* Indexing                           */
+    /* ---------------------------------- */
+
     private rebuildIndexes(): void {
         if (this.indexedFields.length === 0) return;
 
         const data = this.load();
         const indexes: Record<string, Record<string, string[]>> = {};
 
-        for (const field of this.indexedFields) indexes[field as string] = {};
+        for (const field of this.indexedFields) {
+            indexes[field as string] = {};
+        }
 
         for (const doc of data) {
             for (const field of this.indexedFields) {
                 const value = String(doc[field]);
-                if (!indexes[field as string][value]) indexes[field as string][value] = [];
+                indexes[field as string][value] ??= [];
                 indexes[field as string][value].push(doc.id);
             }
         }
@@ -138,144 +222,94 @@ export class Collection<T extends Record<string, any>> {
         writeJSON(this.indexFile, indexes);
     }
 
-    /** Query using index if possible */
-    private queryUsingIndex(query: Query<WithId<T>>): WithId<T>[] | null {
-        if (!this.indexedFields.length) return null;
-        const indexData = readJSON<Record<string, Record<string, string[]>>>(this.indexFile, {});
+    /* ---------------------------------- */
+    /* CRUD                               */
+    /* ---------------------------------- */
 
-        for (const key of Object.keys(query)) {
-            if (this.indexedFields.includes(key as keyof T)) {
-                const value = String(query[key as keyof WithId<T>]);
-                const ids = indexData[key]?.[value];
-                if (!ids) return [];
-                const data = this.load();
-                return data.filter(d => ids.includes(d.id));
-            }
-        }
-
-        return null;
-    }
-
-    // ---------------- CRUD METHODS ---------------- //
-
-    async add(doc: T): Promise<WithId<T>> {
+    async add(doc: T) {
         const validated = this.validateSchema(doc);
+        const timestamp = formatTimestamp(Date.now());
+        const withId = { id: uuid(), createdAt: timestamp, updatedAt: timestamp, ...validated };
         const data = this.load();
-        const withId = { id: uuid(), ...validated } as WithId<T>;
         data.push(withId);
         this.save(data);
         return withId;
     }
 
-    async addMany(docs: T[]): Promise<WithId<T>[]> {
+    async addMany(docs: T[]) {
+        if (!Array.isArray(docs)) {
+            throw new Error("addMany expects an array of documents");
+        }
+        if (!docs.length) return [];
+
+        const persisted = this.load();
         const validatedDocs: T[] = [];
 
-        // Validate batch with distinct check against persisted data and batch itself
         for (const doc of docs) {
-            const validated = this.validateSchema(doc, false, validatedDocs);
+            const validated = this.validateSchema(doc, {
+                existingDocs: validatedDocs.concat(persisted)
+            });
             validatedDocs.push(validated);
         }
 
+        const timestamp = formatTimestamp(Date.now());
+        const withIds = validatedDocs.map(d => ({
+            id: uuid(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            ...d
+        }));
+
         const data = this.load();
-        const withIds = validatedDocs.map(d => ({ id: uuid(), ...d } as WithId<T>));
         data.push(...withIds);
         this.save(data);
         return withIds;
     }
 
-    async getOne(query: Query<WithId<T>>): Promise<WithId<T> | undefined> {
-        const indexed = this.queryUsingIndex(query);
-        const data = indexed ?? this.load();
-        return data.find(d => Object.entries(query).every(([k, v]) => d[k as keyof WithId<T>] === v));
-    }
-
-    async getMany(query: Query<WithId<T>>): Promise<WithId<T>[]> {
-        if (!query || Object.keys(query).length === 0) {
-            throw new Error("getMany requires a query object");
-        }
-        const indexed = this.queryUsingIndex(query);
-        const data = indexed ?? this.load();
-        return data.filter(d => Object.entries(query).every(([k, v]) => d[k as keyof WithId<T>] === v));
-    }
-
-    async getAll(): Promise<WithId<T>[]> {
+    async getAll() {
         return this.load();
     }
 
-    async getManyAdvanced(options: AdvancedQueryOptions<T>): Promise<WithId<T>[]> {
-        if (!options.query || Object.keys(options.query).length === 0) {
-            throw new Error("getManyAdvanced requires a query object");
-        }
-
-        let data = await this.getMany(options.query);
-
-        if (options.sortBy) {
-            const key = options.sortBy;
-            data.sort((a, b) =>
-                a[key] > b[key] ? (options.order === "desc" ? -1 : 1) : (options.order === "desc" ? 1 : -1)
-            );
-        }
-
-        if (options.offset) data = data.slice(options.offset);
-        if (options.limit) data = data.slice(0, options.limit);
-
-        return data;
+    async getOne(query: Query<WithId<T>>) {
+        return this.load().find(d =>
+            Object.entries(query).every(([k, v]) => d[k as keyof WithId<T>] === v)
+        );
     }
 
-    async updateById(id: string, update: Partial<T>): Promise<void> {
+    async getMany(query: Query<WithId<T>>) {
+        if (!query || !Object.keys(query).length) {
+            throw new Error("getMany requires a query object");
+        }
+
+        return this.load().filter(d =>
+            Object.entries(query).every(([k, v]) => d[k as keyof WithId<T>] === v)
+        );
+    }
+
+    async updateById(id: string, update: Partial<T>) {
         const data = this.load();
         const item = data.find(d => d.id === id);
-        if (!item) return;
+        if (!item) throw new Error("Document not found");
 
-        const updated = { ...item, ...update };
-        const validated = this.validateSchema(
-            Object.fromEntries(Object.entries(updated).filter(([k]) => k !== "id")) as T,
-            true
-        );
+        const updatedRaw = { ...item, ...update };
+        delete (updatedRaw as any).id;
+
+        const validated = this.validateSchema(updatedRaw as T, {
+            skipDistinctCheck: true,
+            excludeId: id
+        });
 
         Object.assign(item, validated);
+        item.updatedAt = formatTimestamp(Date.now());
         this.save(data);
     }
 
-    async updateMany(query: Query<WithId<T>>, update: Partial<T>): Promise<void> {
-        if (!query || Object.keys(query).length === 0) {
-            throw new Error("updateMany requires a query object");
-        }
-
-        const data = this.load();
-        let changed = false;
-
-        for (const item of data) {
-            if (Object.entries(query).every(([k, v]) => item[k as keyof WithId<T>] === v)) {
-                const updated = { ...item, ...update };
-                const validated = this.validateSchema(
-                    Object.fromEntries(Object.entries(updated).filter(([k]) => k !== "id")) as T,
-                    true
-                );
-                Object.assign(item, validated);
-                changed = true;
-            }
-        }
-
-        if (changed) this.save(data);
-    }
-
-    async deleteById(id: string): Promise<void> {
+    async deleteById(id: string) {
         const data = this.load().filter(d => d.id !== id);
         this.save(data);
     }
 
-    async deleteMany(query: Query<WithId<T>>): Promise<void> {
-        if (!query || Object.keys(query).length === 0) {
-            throw new Error("deleteMany requires a query object");
-        }
-        const data = this.load().filter(
-            d => !Object.entries(query).every(([k, v]) => d[k as keyof WithId<T>] === v)
-        );
-        this.save(data);
-    }
-
-    async deleteAll(): Promise<void> {
+    async deleteAll() {
         this.save([]);
     }
 }

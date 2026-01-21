@@ -10,6 +10,7 @@ export interface SnapshotMeta {
 
 export interface ChronoDBOptions {
     path?: string;
+    cloudSync?: boolean;
 }
 
 export type PrimitiveType =
@@ -17,11 +18,12 @@ export type PrimitiveType =
     | "number"
     | "boolean"
     | "object"
+    | "array"
     | "undefined"
     | "function";
 
 export interface AdvancedQueryOptions<T> {
-    query?: Query<WithId<T>>;
+    query: Query<WithId<T>>;
     sortBy?: keyof WithId<T>;
     order?: "asc" | "desc";
     limit?: number;
@@ -31,10 +33,6 @@ export interface AdvancedQueryOptions<T> {
 export interface EnumSchema {
     type: "enum";
     values: readonly string[];
-}
-
-export interface FieldSchema {
-    type: "string" | "number" | "boolean" | "object" | "array";
     important?: boolean;
     distinct?: boolean;
     nullable?: boolean;
@@ -42,6 +40,15 @@ export interface FieldSchema {
     validate?: (value: unknown) => boolean;
 }
 
-export type Schema<T extends Record<string, any>> = Partial<{
-    [K in keyof T]: FieldSchema | EnumSchema | "string" | "number" | "boolean" | "object" | "array";
-}>;
+export interface FieldSchema {
+    type: PrimitiveType | "array";
+    important?: boolean;
+    distinct?: boolean;
+    nullable?: boolean;
+    default?: unknown;
+    validate?: (value: unknown) => boolean;
+}
+
+export type Schema<T extends Record<string, any>> = {
+    [K in keyof T]: FieldSchema | EnumSchema | PrimitiveType;
+};

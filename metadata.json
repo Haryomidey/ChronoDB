@@ -1,5 +1,0 @@
-{
-  "name": "ChronoDB Engine Explorer",
-  "description": "A high-fidelity simulation and dashboard for ChronoDB, an append-only, versioned local-first database engine built from scratch.",
-  "requestFramePermissions": []
-}

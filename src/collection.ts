@@ -1,7 +1,14 @@
 import path from "path";
 import { v4 as uuid } from "uuid";
 import { ensureDir, readJSON, writeJSON } from "./utils/file";
-import { AdvancedQueryOptions, EnumSchema, FieldSchema, Query, Schema, WithId } from "./types";
+import {
+    AdvancedQueryOptions,
+    EnumSchema,
+    FieldSchema,
+    Query,
+    Schema,
+    WithId,
+} from "./types";
 
 export class Collection<T extends Record<string, any>> {
     private indexFile: string;
@@ -18,10 +25,12 @@ export class Collection<T extends Record<string, any>> {
         this.rebuildIndexes();
     }
 
+    /** Load all data from JSON file */
     private load(): WithId<T>[] {
         return readJSON<WithId<T>[]>(this.file, []);
     }
 
+    /** Save all data to JSON file */
     private save(data: WithId<T>[]): void {
         writeJSON(this.file, data);
         this.rebuildIndexes();
@@ -29,12 +38,13 @@ export class Collection<T extends Record<string, any>> {
     }
 
     /** Validate schema including important, distinct, enums, arrays, nullable, defaults, and custom validators */
-    private validateSchema(doc: T, skipDistinctCheck = false): T {
+    private validateSchema(doc: T, skipDistinctCheck = false, batchDocs: T[] = []): T {
         if (!this.schema) return doc;
-        const result: Record<string, any> = { ...doc };
-        const data = this.load();
 
-        // Reject unknown fields if strict mode
+        const result: Record<string, any> = { ...doc };
+        const persistedData = this.load();
+
+        // Strict mode: reject unknown fields
         if (this.strict) {
             for (const key of Object.keys(result)) {
                 if (!(key in this.schema)) {
@@ -47,14 +57,14 @@ export class Collection<T extends Record<string, any>> {
             const rule = this.schema[key];
             const value = result[key];
 
-            // Primitive string type
+            // Primitive type schema shortcut
             if (typeof rule === "string") {
                 if (value === undefined) throw new Error(`Schema violation: ${key} is important`);
                 if (typeof value !== rule) throw new Error(`Schema violation: ${key} should be ${rule}`);
                 continue;
             }
 
-            // Enum type
+            // Enum validation
             if ((rule as EnumSchema).type === "enum") {
                 const enumRule = rule as EnumSchema;
                 if (value === undefined) throw new Error(`Schema violation: ${key} is important`);
@@ -66,27 +76,28 @@ export class Collection<T extends Record<string, any>> {
 
             const fieldRule = rule as FieldSchema & { important?: boolean; distinct?: boolean };
 
-            // Missing value
+            // Handle missing value
             if (value === undefined) {
                 if (fieldRule.default !== undefined) {
                     result[key] = fieldRule.default;
                     continue;
                 }
-                if (!fieldRule.important) continue;
-                throw new Error(`Schema violation: ${key} is important`);
-            }
-
-            // Null value
-            if (value === null) {
-                if (!fieldRule.nullable) throw new Error(`Schema violation: ${key} cannot be null`);
+                if (fieldRule.important) throw new Error(`Schema violation: ${key} is important`);
                 continue;
             }
 
+            // Null check
+            if (value === null && !fieldRule.nullable) {
+                throw new Error(`Schema violation: ${key} cannot be null`);
+            }
+
             // Type check
-            if (fieldRule.type === "array") {
-                if (!Array.isArray(value)) throw new Error(`Schema violation: ${key} should be an array`);
-            } else if (typeof value !== fieldRule.type) {
-                throw new Error(`Schema violation: ${key} should be ${fieldRule.type}`);
+            if (value !== null) {
+                if (fieldRule.type === "array") {
+                    if (!Array.isArray(value)) throw new Error(`Schema violation: ${key} should be an array`);
+                } else if (typeof value !== fieldRule.type) {
+                    throw new Error(`Schema violation: ${key} should be ${fieldRule.type}`);
+                }
             }
 
             // Custom validator
@@ -94,10 +105,13 @@ export class Collection<T extends Record<string, any>> {
                 throw new Error(`Schema violation: ${key} failed custom validation`);
             }
 
-            // Unique check
-            if (!skipDistinctCheck && fieldRule.distinct) {
-                const exists = data.some(d => d[key] === value);
-                if (exists) throw new Error(`Schema violation: ${key} must be distinct (unique)`);
+            // Unique/distinct check
+            if (fieldRule.distinct && !skipDistinctCheck) {
+                const existsInPersisted = persistedData.some(d => d[key] === value);
+                const existsInBatch = batchDocs.some(d => d[key] === value);
+                if (existsInPersisted || existsInBatch) {
+                    throw new Error(`Schema violation: ${key} must be distinct`);
+                }
             }
         }
 
@@ -127,7 +141,6 @@ export class Collection<T extends Record<string, any>> {
     /** Query using index if possible */
     private queryUsingIndex(query: Query<WithId<T>>): WithId<T>[] | null {
         if (!this.indexedFields.length) return null;
-
         const indexData = readJSON<Record<string, Record<string, string[]>>>(this.indexFile, {});
 
         for (const key of Object.keys(query)) {
@@ -155,11 +168,16 @@ export class Collection<T extends Record<string, any>> {
     }
 
     async addMany(docs: T[]): Promise<WithId<T>[]> {
+        const validatedDocs: T[] = [];
+
+        // Validate batch with distinct check against persisted data and batch itself
+        for (const doc of docs) {
+            const validated = this.validateSchema(doc, false, validatedDocs);
+            validatedDocs.push(validated);
+        }
+
         const data = this.load();
-        const withIds = docs.map(d => {
-            const validated = this.validateSchema(d);
-            return { id: uuid(), ...validated } as WithId<T>;
-        });
+        const withIds = validatedDocs.map(d => ({ id: uuid(), ...d } as WithId<T>));
         data.push(...withIds);
         this.save(data);
         return withIds;
@@ -234,7 +252,6 @@ export class Collection<T extends Record<string, any>> {
                     Object.fromEntries(Object.entries(updated).filter(([k]) => k !== "id")) as T,
                     true
                 );
-
                 Object.assign(item, validated);
                 changed = true;
             }

@@ -1,16 +1,33 @@
 {
     "name": "chronodb",
     "version": "1.0.0",
-    "description": "ChronoDB: Local-first TypeScript database with snapshots and optional cloud sync",
+    "description": "ChronoDB: Local-first TypeScript database with snapshots and optional cloud sync (cloud sync not fully implemented yet)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "bin": {
         "chronodb": "./dist/cli.js"
     },
     "scripts": {
-        "build": "tsc",
-        "start": "node dist/cli.js"
+        "build": "tsc -b",
+        "prepare": "npm run build",
+        "start": "node dist/cli.js",
+        "test": "echo \"No tests defined\" && exit 0"
     },
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "keywords": [
+        "database",
+        "typescript",
+        "json",
+        "local-first",
+        "snapshot",
+        "offline",
+        "chronodb"
+    ],
+    "author": "Ayotech <https://github.com/Haryomidey>",
+    "license": "MIT",
     "dependencies": {
         "axios": "^1.6.8",
         "conf": "^15.0.2",

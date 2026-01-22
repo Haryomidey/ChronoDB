@@ -2,7 +2,7 @@
 
 > **ChronoDB** is a **local-first, file-based TypeScript database engine** with schema validation, indexing, transactions, and snapshot-based versioning designed for simplicity, predictability, and offline-first applications.
 
-ChronoDB stores data as plain JSON files, adds strong schema guarantees, and tracks changes through snapshots that can later be synced to the cloud.
+ChronoDB stores data as plain JSON files, adds strong schema guarantees, and tracks changes through snapshots that can later be synced to the cloud (cloud sync is **not fully integrated yet**).
 
 ---
 
@@ -17,7 +17,7 @@ ChronoDB stores data as plain JSON files, adds strong schema guarantees, and tra
 * 📦 **Collections API (CRUD)**
 * 🔁 **Transactions with rollback**
 * 🕒 **Automatic & manual snapshots**
-* ☁️ **Optional cloud sync (pluggable)**
+* ☁️ **Optional cloud sync (not fully integrated yet)**
 * 🧠 **Type-safe (TypeScript-first)**
 
 ---
@@ -221,9 +221,18 @@ await users.updateById(id, {
 });
 ```
 
+### Update Many
+
+```
+await users.updateMany({ role: "guest" }, {
+    role: "user"
+});
+```
+
 * Schema is revalidated
-* `updatedAt` is refreshed
+* `updatedAt` is refreshed for all matching documents
 * Distinct fields are respected
+* Supports updating multiple documents at once
 
 ---
 
@@ -332,13 +341,13 @@ await db.snapshots.deleteAll();
 await db.snapshots.setInterval(60000); // every 1 min
 ```
 
-> Snapshots are metadata-first and designed to power restore & cloud sync.
+> Snapshots are metadata-first and designed to power restore & future cloud sync.
 
 ---
 
-## ☁️ Cloud Sync (Optional)
+## ☁️ Cloud Sync (Optional, Not Fully Integrated)
 
-ChronoDB supports **pluggable cloud sync**.
+ChronoDB supports **pluggable cloud sync**, but the feature is still in progress.
 
 ```
 new ChronoEngine("./data", {
@@ -346,11 +355,11 @@ new ChronoEngine("./data", {
 });
 ```
 
-* Snapshots are synced, not raw files
+* Snapshots are planned to be synced, not raw files
 * Cloud logic is abstracted via `CloudSync`
 * Authentication & providers are user-defined
 
-> This keeps ChronoDB local-first and provider-agnostic.
+> Currently, cloud sync is **not fully functional**.
 
 ---
 

@@ -280,6 +280,35 @@ export class Collection<T extends Record<string, any>> {
         this.save(data);
     }
 
+    async updateMany(query: Query<WithId<T>>, update: Partial<T>) {
+        if (!query || Object.keys(query).length === 0) {
+            throw new Error("updateMany requires a query object");
+        }
+
+        const data = this.load();
+        let changed = false;
+
+        for (const item of data) {
+            if (Object.entries(query).every(([k, v]) => item[k as keyof WithId<T>] === v)) {
+                const updatedRaw = { ...item, ...update };
+                delete (updatedRaw as any).id;
+
+                const validated = this.validateSchema(updatedRaw as T, {
+                    skipDistinctCheck: true,
+                    excludeId: item.id
+                });
+
+                Object.assign(item, validated);
+                item.updatedAt = formatTimestamp(Date.now());
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.save(data);
+        }
+    }
+
     async deleteById(id: string) {
         const data = this.load().filter(d => d.id !== id);
         this.save(data);

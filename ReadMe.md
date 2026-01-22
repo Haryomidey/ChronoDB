@@ -1,6 +1,6 @@
 # ChronoDB
 
-> **ChronoDB** is a **local-first, file-based TypeScript database engine** with schema validation, indexing, transactions, and snapshot-based versioning — designed for simplicity, predictability, and offline-first applications.
+> **ChronoDB** is a **local-first, file-based TypeScript database engine** with schema validation, indexing, transactions, and snapshot-based versioning designed for simplicity, predictability, and offline-first applications.
 
 ChronoDB stores data as plain JSON files, adds strong schema guarantees, and tracks changes through snapshots that can later be synced to the cloud.
 

@@ -39,13 +39,16 @@ yarn add chronodb
 ## 🚀 Quick Start
 
 ```
-import { ChronoEngine } from "chronodb";
+import ChronoDB from "chronodb";
 
-const db = new ChronoEngine("./data");
+const db = await ChronoDB.open({ cloudSync: false });
 
 const users = db.col("users", {
     schema: {
-        name: "string",
+        name: {
+            type: "string",
+            important: true,
+        },
         email: {
             type: "string",
             distinct: true,
@@ -55,7 +58,8 @@ const users = db.col("users", {
             values: ["admin", "user"],
             default: "user",
         },
-    },
+        age: "number"
+    }
 });
 ```
 

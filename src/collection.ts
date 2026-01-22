@@ -2,25 +2,13 @@ import path from "path";
 import { v4 as uuid } from "uuid";
 import { ensureDir, readJSON, writeJSON } from "./utils/file";
 import { EnumSchema, FieldSchema, Query, Schema, WithId } from "./types";
-
-/* ---------------------------------- */
-/* Utilities                          */
-/* ---------------------------------- */
-
-function formatTimestamp(ts: number) {
-    const d = new Date(ts);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
+import { formatTimestamp } from "./utils/formatTimestamp";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/* ---------------------------------- */
 /* Collection                         */
-/* ---------------------------------- */
-
 export class Collection<T extends Record<string, any>> {
     private indexFile: string;
 
@@ -75,10 +63,7 @@ export class Collection<T extends Record<string, any>> {
         this.rebuildIndexes();
     }
 
-    /* ---------------------------------- */
     /* Storage                            */
-    /* ---------------------------------- */
-
     private load(): WithId<T & { createdAt: string; updatedAt: string }>[] {
         return readJSON(this.file, []);
     }
@@ -89,10 +74,7 @@ export class Collection<T extends Record<string, any>> {
         this.onChange();
     }
 
-    /* ---------------------------------- */
     /* Schema Validation                  */
-    /* ---------------------------------- */
-
     private validateSchema(
         doc: T,
         opts?: { skipDistinctCheck?: boolean; existingDocs?: Array<Record<string, any>>; excludeId?: string }
@@ -197,10 +179,7 @@ export class Collection<T extends Record<string, any>> {
         return result as T;
     }
 
-    /* ---------------------------------- */
     /* Indexing                           */
-    /* ---------------------------------- */
-
     private rebuildIndexes(): void {
         if (this.indexedFields.length === 0) return;
 
@@ -222,9 +201,6 @@ export class Collection<T extends Record<string, any>> {
         writeJSON(this.indexFile, indexes);
     }
 
-    /* ---------------------------------- */
-    /* CRUD                               */
-    /* ---------------------------------- */
 
     async add(doc: T) {
         const validated = this.validateSchema(doc);
@@ -307,6 +283,29 @@ export class Collection<T extends Record<string, any>> {
     async deleteById(id: string) {
         const data = this.load().filter(d => d.id !== id);
         this.save(data);
+    }
+
+    async deleteMany(query: Query<WithId<T>>) {
+        if (!query || !Object.keys(query).length) {
+            throw new Error("deleteMany requires a query object");
+        }
+
+        const data = this.load();
+        const initialLength = data.length;
+
+        const remaining = data.filter(d =>
+            !Object.entries(query).every(([k, v]) =>
+                d[k as keyof WithId<T>] === v
+            )
+        );
+
+        const deletedCount = initialLength - remaining.length;
+
+        if (deletedCount > 0) {
+            this.save(remaining);
+        }
+
+        return deletedCount;
     }
 
     async deleteAll() {

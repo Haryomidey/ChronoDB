@@ -354,7 +354,7 @@ await db.snapshots.setInterval(60000); // every 1 min
 ChronoDB supports **pluggable cloud sync**, but the feature is still in progress.
 
 ```
-new ChronoEngine("./data", {
+new ChronoDB("./data", {
     cloudSync: true
 });
 ```
